@@ -6,12 +6,10 @@ Pre-configured [PicoClaw](https://github.com/nichochar/picoclaw) on a Raspberry 
 
 ## What is this?
 
-A $150 alternative to buying a $600+ Mac mini just to run an AI agent 24/7. PiClaw gives you:
 
 - ⚡ **Ready out of the box** — plug in power + ethernet, scan QR code, done
 - 🤖 **Your own AI agent** — running 24/7 on hardware you own
 - 🔒 **Private & local** — your data stays on your device
-- 💰 **Affordable** — fraction of the cost of a Mac mini setup
 
 ## How It Works
 
