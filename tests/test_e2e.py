@@ -21,7 +21,8 @@ FLASK_URL = f"http://localhost:{FLASK_PORT}"
 SCREENSHOTS_DIR = Path(__file__).parent.parent / "docs" / "test-screenshots"
 
 # Directories the app expects
-OPT_DIRS = ["/opt/picoclaw/config", "/opt/picoclaw/workspace", "/opt/piclaw"]
+PICOCLAW_HOME = os.environ.get("PICOCLAW_HOME", "/home/picoclaw/.picoclaw")
+OPT_DIRS = [PICOCLAW_HOME, f"{PICOCLAW_HOME}/workspace", "/opt/piclaw"]
 
 
 @pytest.fixture(scope="session", autouse=True)
@@ -32,7 +33,7 @@ def setup_dirs():
     SCREENSHOTS_DIR.mkdir(parents=True, exist_ok=True)
     yield
     # Cleanup after tests
-    for f in ["/opt/picoclaw/config/picoclaw.json", "/opt/picoclaw/config/env", "/opt/piclaw/.setup-complete"]:
+    for f in [f"{PICOCLAW_HOME}/config.json", "/opt/piclaw/.setup-complete"]:
         try:
             os.remove(f)
         except FileNotFoundError:
@@ -50,7 +51,7 @@ def flask_server():
 
     proc = subprocess.Popen(
         [str(venv_python), str(app_path)],
-        env=env,
+        env={**env, "PICOCLAW_HOME": PICOCLAW_HOME},
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         preexec_fn=os.setsid,
@@ -233,20 +234,17 @@ class TestSetupWizardE2E:
         expect(title).to_have_text("You're All Set!")
         page.screenshot(path=str(SCREENSHOTS_DIR / "10-flow-complete.png"))
 
-        # Verify config was created
-        config_path = Path("/opt/picoclaw/config/picoclaw.json")
+        # Verify config was created in PicoClaw's native format
+        config_path = Path(PICOCLAW_HOME) / "config.json"
         assert config_path.exists(), "Config file should be created"
         config = json.loads(config_path.read_text())
-        assert config["provider"] == "anthropic"
-        assert config["model"] == "claude-sonnet-4-5"
+        assert config["agents"]["defaults"]["provider"] == "anthropic"
+        assert config["agents"]["defaults"]["model"] == "claude-sonnet-4-5"
+        assert config["providers"]["anthropic"]["api_key"] == "sk-ant-test-key-123456"
 
-        # Verify env file exists and has correct permissions
-        env_path = Path("/opt/picoclaw/config/env")
-        assert env_path.exists(), "Env file should be created"
-        env_perms = oct(env_path.stat().st_mode)[-3:]
-        assert env_perms == "600", f"Env file should be 600, got {env_perms}"
-        env_content = env_path.read_text()
-        assert "ANTHROPIC_API_KEY=sk-ant-test-key-123456" in env_content
+        # Verify config file permissions (600 — contains API key)
+        config_perms = oct(config_path.stat().st_mode)[-3:]
+        assert config_perms == "600", f"Config file should be 600, got {config_perms}"
 
         # Navigate to dashboard
         page.locator("a", has_text="Go to Dashboard").click()

@@ -13,33 +13,33 @@ from flask import Flask, render_template, request, jsonify, redirect, url_for
 
 app = Flask(__name__)
 
-CONFIG_DIR = Path("/opt/picoclaw/config")
-CONFIG_FILE = CONFIG_DIR / "picoclaw.json"
-WORKSPACE_DIR = Path("/opt/picoclaw/workspace")
+PICOCLAW_HOME = Path(os.environ.get("PICOCLAW_HOME", "/home/picoclaw/.picoclaw"))
+CONFIG_FILE = PICOCLAW_HOME / "config.json"
+WORKSPACE_DIR = PICOCLAW_HOME / "workspace"
 SETUP_COMPLETE_MARKER = Path("/opt/piclaw/.setup-complete")
 
 SUPPORTED_PROVIDERS = {
     "anthropic": {
         "name": "Anthropic (Claude)",
-        "env_key": "ANTHROPIC_API_KEY",
+        "config_key": "anthropic",
         "default_model": "claude-sonnet-4-5",
         "docs_url": "https://console.anthropic.com/settings/keys",
     },
     "openai": {
         "name": "OpenAI (GPT)",
-        "env_key": "OPENAI_API_KEY",
+        "config_key": "openai",
         "default_model": "gpt-4o",
         "docs_url": "https://platform.openai.com/api-keys",
     },
-    "google": {
+    "gemini": {
         "name": "Google (Gemini)",
-        "env_key": "GOOGLE_API_KEY",
+        "config_key": "gemini",
         "default_model": "gemini-2.5-flash",
         "docs_url": "https://aistudio.google.com/apikey",
     },
     "groq": {
         "name": "Groq",
-        "env_key": "GROQ_API_KEY",
+        "config_key": "groq",
         "default_model": "llama-3.3-70b",
         "docs_url": "https://console.groq.com/keys",
     },
@@ -108,38 +108,61 @@ def setup_step3():
     if not provider_info:
         return redirect(url_for("setup_step2"))
 
-    # Create PicoClaw config
-    CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+    # Create PicoClaw config in its native format
+    PICOCLAW_HOME.mkdir(parents=True, exist_ok=True)
     WORKSPACE_DIR.mkdir(parents=True, exist_ok=True)
 
-    config = {
-        "name": device_name,
-        "provider": provider,
-        "model": provider_info["default_model"],
+    # Read existing config template or create from scratch
+    if CONFIG_FILE.exists():
+        with open(CONFIG_FILE) as f:
+            config = json.load(f)
+    else:
+        config = {
+            "agents": {
+                "defaults": {
+                    "workspace": str(WORKSPACE_DIR),
+                    "restrict_to_workspace": True,
+                    "provider": provider_info["config_key"],
+                    "model": provider_info["default_model"],
+                    "max_tokens": 8192,
+                    "temperature": 0.7,
+                    "max_tool_iterations": 20,
+                }
+            },
+            "channels": {
+                "telegram": {"enabled": False, "token": "", "allow_from": []},
+            },
+            "providers": {},
+            "gateway": {"host": "0.0.0.0", "port": 18790},
+            "tools": {
+                "web": {
+                    "duckduckgo": {"enabled": True, "max_results": 5},
+                }
+            },
+            "heartbeat": {"enabled": True, "interval": 30},
+        }
+
+    # Set the provider and API key
+    config["agents"]["defaults"]["provider"] = provider_info["config_key"]
+    config["agents"]["defaults"]["model"] = provider_info["default_model"]
+
+    if "providers" not in config:
+        config["providers"] = {}
+    config["providers"][provider_info["config_key"]] = {
+        "api_key": api_key,
+        "api_base": "",
     }
 
     with open(CONFIG_FILE, "w") as f:
         json.dump(config, f, indent=2)
+    os.chmod(CONFIG_FILE, 0o600)
 
-    # Write environment file for systemd
-    env_file = Path("/opt/picoclaw/config/env")
-    with open(env_file, "w") as f:
-        f.write(f'{provider_info["env_key"]}={api_key}\n')
-    os.chmod(env_file, 0o600)
-
-    # Run PicoClaw onboard
-    try:
-        env = os.environ.copy()
-        env[provider_info["env_key"]] = api_key
-        subprocess.run(
-            ["/opt/picoclaw/picoclaw", "onboard", "--non-interactive",
-             "--provider", provider, "--model", provider_info["default_model"]],
-            env=env,
-            timeout=30,
-            capture_output=True,
-        )
-    except Exception as e:
-        app.logger.error(f"PicoClaw onboard failed: {e}")
+    # Store display config for the completion page
+    display_config = {
+        "name": device_name,
+        "provider": provider_info["name"],
+        "model": provider_info["default_model"],
+    }
 
     # Enable and start PicoClaw service
     subprocess.run(["systemctl", "enable", "picoclaw.service"], capture_output=True)
@@ -148,7 +171,7 @@ def setup_step3():
     # Mark setup complete
     SETUP_COMPLETE_MARKER.touch()
 
-    return render_template("setup_complete.html", device=get_device_info(), config=config)
+    return render_template("setup_complete.html", device=get_device_info(), config=display_config)
 
 
 @app.route("/dashboard")
@@ -167,7 +190,11 @@ def dashboard():
     config = {}
     if CONFIG_FILE.exists():
         with open(CONFIG_FILE) as f:
-            config = json.load(f)
+            raw = json.load(f)
+            config = {
+                "provider": raw.get("agents", {}).get("defaults", {}).get("provider", "N/A"),
+                "model": raw.get("agents", {}).get("defaults", {}).get("model", "N/A"),
+            }
 
     return render_template(
         "dashboard.html",

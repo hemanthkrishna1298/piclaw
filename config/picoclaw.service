@@ -8,18 +8,21 @@ ConditionPathExists=/opt/piclaw/.setup-complete
 Type=simple
 User=picoclaw
 Group=picoclaw
-EnvironmentFile=/opt/picoclaw/config/env
-ExecStart=/opt/picoclaw/picoclaw run
-WorkingDirectory=/opt/picoclaw/workspace
+ExecStart=/opt/picoclaw/picoclaw gateway
+WorkingDirectory=/home/picoclaw/.picoclaw/workspace
 Restart=always
 RestartSec=10
 StandardOutput=journal
 StandardError=journal
 
+# PicoClaw reads config from ~/.picoclaw/config.json
+Environment=HOME=/home/picoclaw
+
 # Security hardening
 NoNewPrivileges=yes
 ProtectSystem=strict
-ProtectHome=yes
+ProtectHome=no
+ReadWritePaths=/home/picoclaw
 ReadWritePaths=/opt/picoclaw
 PrivateTmp=yes
 
