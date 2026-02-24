@@ -1,0 +1,14 @@
+[Unit]
+Description=PiClaw First Boot Setup
+After=network-online.target
+Wants=network-online.target
+ConditionPathExists=!/opt/piclaw/.first-boot-done
+
+[Service]
+Type=oneshot
+ExecStartPre=/opt/piclaw/scripts/install-deps.sh
+ExecStart=/opt/piclaw/scripts/first-boot.sh
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

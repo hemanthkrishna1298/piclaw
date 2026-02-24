@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="logo">🔑</div>
+<h1>Connect AI Provider</h1>
+<p class="subtitle">Choose your AI provider and enter your API key.</p>
+
+<div class="step-indicator">
+    <div class="step-dot active"></div>
+    <div class="step-dot active"></div>
+    <div class="step-dot"></div>
+</div>
+
+<form action="/setup/3" method="POST" id="providerForm">
+    <input type="hidden" name="provider" id="selectedProvider" value="">
+
+    <div class="provider-grid">
+        {% for key, p in providers.items() %}
+        <div class="provider-card" onclick="selectProvider('{{ key }}', this)">
+            <div class="name">{{ p.name }}</div>
+            <div class="model">{{ p.default_model }}</div>
+        </div>
+        {% endfor %}
+    </div>
+
+    <div class="card" id="apiKeySection" style="display: none;">
+        <label for="api_key">API Key</label>
+        <input type="password" id="api_key" name="api_key" placeholder="sk-...">
+        <a href="#" class="help-link" id="docsLink" target="_blank">Where do I find this? →</a>
+    </div>
+
+    <button type="submit" class="btn" id="submitBtn" style="display: none;">
+        Start My Agent →
+    </button>
+</form>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const docsUrls = {
+    {% for key, p in providers.items() %}
+    "{{ key }}": "{{ p.docs_url }}",
+    {% endfor %}
+};
+
+function selectProvider(key, el) {
+    document.querySelectorAll('.provider-card').forEach(c => c.classList.remove('selected'));
+    el.classList.add('selected');
+    document.getElementById('selectedProvider').value = key;
+    document.getElementById('apiKeySection').style.display = 'block';
+    document.getElementById('submitBtn').style.display = 'block';
+    document.getElementById('docsLink').href = docsUrls[key];
+    document.getElementById('api_key').focus();
+}
+</script>
+{% endblock %}

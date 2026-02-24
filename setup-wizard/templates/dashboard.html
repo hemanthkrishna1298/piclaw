@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="logo">🐾</div>
+<h1>PiClaw Dashboard</h1>
+<p class="subtitle">{{ device.hostname }} · {{ device.ip }}</p>
+
+<div class="card">
+    <label>PicoClaw Agent</label>
+    <p>
+        <strong>Status:</strong>
+        {% if status == "active" %}
+            <span class="status-badge status-active">● Running</span>
+        {% else %}
+            <span class="status-badge status-inactive">● {{ status }}</span>
+        {% endif %}
+    </p>
+    {% if config %}
+    <p><strong>Provider:</strong> {{ config.get('provider', 'N/A') }}</p>
+    <p><strong>Model:</strong> {{ config.get('model', 'N/A') }}</p>
+    {% endif %}
+</div>
+
+<div class="card">
+    <label>Quick Actions</label>
+    <div style="display: flex; gap: 0.5rem; margin-top: 0.5rem;">
+        <button onclick="restartAgent()" class="btn btn-secondary" style="flex:1;">
+            🔄 Restart Agent
+        </button>
+    </div>
+</div>
+
+<div class="card">
+    <label>Device Info</label>
+    <p class="info"><strong>Hostname:</strong> {{ device.hostname }}</p>
+    <p class="info"><strong>IP Address:</strong> {{ device.ip }}</p>
+    <p class="info"><strong>Local URL:</strong> http://piclaw.local:8080</p>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+async function restartAgent() {
+    const btn = event.target;
+    btn.textContent = "Restarting...";
+    btn.disabled = true;
+    try {
+        const res = await fetch('/api/restart', { method: 'POST' });
+        const data = await res.json();
+        btn.textContent = data.status === 'ok' ? '✅ Restarted!' : '❌ Failed';
+        setTimeout(() => { btn.textContent = '🔄 Restart Agent'; btn.disabled = false; }, 3000);
+    } catch (e) {
+        btn.textContent = '❌ Error';
+        setTimeout(() => { btn.textContent = '🔄 Restart Agent'; btn.disabled = false; }, 3000);
+    }
+}
+</script>
+{% endblock %}

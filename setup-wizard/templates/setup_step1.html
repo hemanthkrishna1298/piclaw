@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="logo">🐾</div>
+<h1>Welcome to PiClaw</h1>
+<p class="subtitle">Your personal AI agent, ready in minutes.</p>
+
+<div class="step-indicator">
+    <div class="step-dot active"></div>
+    <div class="step-dot"></div>
+    <div class="step-dot"></div>
+</div>
+
+<form action="/setup/2" method="POST">
+    <div class="card">
+        <label for="device_name">Name your device</label>
+        <input type="text" id="device_name" name="device_name"
+               value="{{ device.hostname }}" placeholder="e.g. piclaw, jarvis, hal">
+        <p class="info">This is how your AI agent will identify itself.</p>
+    </div>
+
+    <button type="submit" class="btn">Continue →</button>
+</form>
+{% endblock %}

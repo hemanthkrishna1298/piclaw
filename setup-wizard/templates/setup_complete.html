@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="success-icon">✅</div>
+<h1>You're All Set!</h1>
+<p class="subtitle">Your AI agent "{{ config.name }}" is now running.</p>
+
+<div class="step-indicator">
+    <div class="step-dot active"></div>
+    <div class="step-dot active"></div>
+    <div class="step-dot active"></div>
+</div>
+
+<div class="card">
+    <p><strong>Agent Name:</strong> {{ config.name }}</p>
+    <p><strong>Provider:</strong> {{ config.provider }}</p>
+    <p><strong>Model:</strong> {{ config.model }}</p>
+    <p><strong>Status:</strong> <span class="status-badge status-active">Running</span></p>
+</div>
+
+<div class="card">
+    <label>What's Next?</label>
+    <p class="info" style="color: #ccc;">
+        Your PiClaw agent is running 24/7. You can interact with it through
+        the PicoClaw interface or connect messaging services like Telegram.
+    </p>
+    <br>
+    <p class="info">
+        Visit the <a href="/dashboard" class="help-link">dashboard</a> to monitor your agent,
+        or check the <a href="https://github.com/sipeed/picoclaw" class="help-link" target="_blank">PicoClaw docs</a>
+        for advanced configuration.
+    </p>
+</div>
+
+<a href="/dashboard" class="btn">Go to Dashboard →</a>
+{% endblock %}

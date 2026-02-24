@@ -1,0 +1,14 @@
+[Unit]
+Description=PiClaw Setup Wizard (Web UI)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/python3 /opt/piclaw/setup-wizard/app.py
+WorkingDirectory=/opt/piclaw/setup-wizard
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

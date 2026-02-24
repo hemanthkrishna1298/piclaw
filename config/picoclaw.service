@@ -1,0 +1,27 @@
+[Unit]
+Description=PicoClaw AI Agent
+After=network-online.target piclaw-first-boot.service
+Wants=network-online.target
+ConditionPathExists=/opt/piclaw/.setup-complete
+
+[Service]
+Type=simple
+User=picoclaw
+Group=picoclaw
+EnvironmentFile=/opt/picoclaw/config/env
+ExecStart=/opt/picoclaw/picoclaw run
+WorkingDirectory=/opt/picoclaw/workspace
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+
+# Security hardening
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths=/opt/picoclaw
+PrivateTmp=yes
+
+[Install]
+WantedBy=multi-user.target
