@@ -1,4 +1,4 @@
-# 🐾 PyClaw
+# 🐾 PiClaw
 
 **Plug-and-play AI agent box for Raspberry Pi.**
 
@@ -6,7 +6,7 @@ Pre-configured [PicoClaw](https://github.com/nichochar/picoclaw) on a Raspberry 
 
 ## What is this?
 
-A $150 alternative to buying a $600+ Mac mini just to run an AI agent 24/7. PyClaw gives you:
+A $150 alternative to buying a $600+ Mac mini just to run an AI agent 24/7. PiClaw gives you:
 
 - ⚡ **Ready out of the box** — plug in power + ethernet, scan QR code, done
 - 🤖 **Your own AI agent** — running 24/7 on hardware you own
@@ -15,7 +15,7 @@ A $150 alternative to buying a $600+ Mac mini just to run an AI agent 24/7. PyCl
 
 ## How It Works
 
-1. **Plug in** your PyClaw box (power + ethernet or WiFi)
+1. **Plug in** your PiClaw box (power + ethernet or WiFi)
 2. **Scan the QR code** on the device
 3. **Follow the setup wizard** (connect your AI provider, set your name)
 4. **Done** — your AI agent is running
@@ -23,7 +23,7 @@ A $150 alternative to buying a $600+ Mac mini just to run an AI agent 24/7. PyCl
 ## What's Inside
 
 - Raspberry Pi 5 (4GB)
-- Pre-flashed SD card with PyClaw OS
+- Pre-flashed SD card with PiClaw OS
 - PicoClaw (lightweight Go-based AI agent runtime)
 - Web-based setup wizard
 - Auto-update system
