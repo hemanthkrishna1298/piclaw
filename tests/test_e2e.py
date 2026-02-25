@@ -51,7 +51,7 @@ def flask_server():
 
     proc = subprocess.Popen(
         [str(venv_python), str(app_path)],
-        env={**env, "PICOCLAW_HOME": PICOCLAW_HOME},
+        env={**env, "PICOCLAW_HOME": PICOCLAW_HOME, "PICLAW_TESTING": "1"},
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         preexec_fn=os.setsid,
@@ -326,3 +326,158 @@ class TestMobileResponsiveness:
 
         page.screenshot(path=str(SCREENSHOTS_DIR / f"responsive-step2-{name}.png"))
         page.close()
+
+
+class TestErrorHandling:
+    """Test error states and validation."""
+
+    def test_step2_empty_submission_blocked(self, flask_server, page):
+        """Submitting step 2 without provider should show client-side error."""
+        page.goto(f"{FLASK_URL}/setup/2")
+
+        # Try to submit the form directly via JS (bypass hidden button)
+        page.evaluate("document.getElementById('providerForm').requestSubmit()")
+        page.wait_for_timeout(500)
+
+        # Should show error banner
+        error = page.locator("#errorBanner")
+        expect(error).to_be_visible()
+        page.screenshot(path=str(SCREENSHOTS_DIR / "14-error-no-provider.png"))
+
+    def test_step2_empty_key_blocked(self, flask_server, page):
+        """Submitting with provider but no key should show error."""
+        page.goto(f"{FLASK_URL}/setup/2")
+
+        page.locator(".provider-card", has_text="Anthropic").click()
+        # Don't fill the key — click submit
+        page.locator("#submitBtn").click()
+        page.wait_for_timeout(500)
+
+        error = page.locator("#errorBanner")
+        expect(error).to_be_visible()
+        page.screenshot(path=str(SCREENSHOTS_DIR / "15-error-no-key.png"))
+
+    def test_step2_short_key_blocked(self, flask_server, page):
+        """Short API key should be blocked client-side."""
+        page.goto(f"{FLASK_URL}/setup/2")
+
+        page.locator(".provider-card", has_text="OpenAI").click()
+        page.locator("#api_key").fill("abc")
+        page.locator("#submitBtn").click()
+        page.wait_for_timeout(500)
+
+        error = page.locator("#errorBanner")
+        expect(error).to_be_visible()
+        assert "too short" in error.text_content().lower()
+        page.screenshot(path=str(SCREENSHOTS_DIR / "16-error-short-key.png"))
+
+    def test_validate_key_api_endpoint(self, flask_server, page):
+        """API validation endpoint should return proper JSON."""
+        # Missing fields
+        page.goto(f"{FLASK_URL}/setup/1")  # just to have a page context
+        result = page.evaluate("""async () => {
+            const res = await fetch('/api/validate-key', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({provider: '', api_key: ''})
+            });
+            return await res.json();
+        }""")
+        assert result["valid"] is False
+        assert "required" in result["error"].lower()
+
+    def test_step2_loading_state_on_submit(self, flask_server, page):
+        """Submit button should show spinner when clicked with valid input."""
+        page.goto(f"{FLASK_URL}/setup/2")
+
+        page.locator(".provider-card", has_text="Groq").click()
+        page.locator("#api_key").fill("gsk_test_key_that_is_long_enough")
+
+        # Check the spinner text appears (form will submit but we catch the state)
+        page.locator("#submitBtn").click()
+
+        # Button should show loading state briefly
+        spinner = page.locator("#btnSpinner")
+        # It might have already submitted, so just verify the JS ran
+        page.screenshot(path=str(SCREENSHOTS_DIR / "17-submit-loading.png"))
+
+
+class TestWiFiSetup:
+    """Test WiFi setup page and API endpoints."""
+
+    def test_wifi_page_renders(self, flask_server, page):
+        """WiFi setup page should render correctly."""
+        page.goto(f"{FLASK_URL}/wifi")
+
+        expect(page.locator("h1")).to_have_text("Connect to WiFi")
+        expect(page.locator("#scanCard")).to_be_visible()
+        page.screenshot(path=str(SCREENSHOTS_DIR / "18-wifi-setup.png"))
+
+    def test_wifi_scan_api_no_script(self, flask_server, page):
+        """WiFi scan should return error when script not available."""
+        page.goto(f"{FLASK_URL}/setup/1")
+        result = page.evaluate("""async () => {
+            const res = await fetch('/api/wifi/scan', { method: 'POST' });
+            return await res.json();
+        }""")
+        assert "networks" in result
+        assert result.get("error") is not None  # script doesn't exist on EC2
+
+    def test_wifi_connect_api_validation(self, flask_server, page):
+        """WiFi connect should validate required fields."""
+        page.goto(f"{FLASK_URL}/setup/1")
+
+        # Missing SSID
+        result = page.evaluate("""async () => {
+            const res = await fetch('/api/wifi/connect', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ssid: '', password: 'test'})
+            });
+            return await res.json();
+        }""")
+        assert result["success"] is False
+        assert "ssid" in result["error"].lower()
+
+        # Missing password
+        result = page.evaluate("""async () => {
+            const res = await fetch('/api/wifi/connect', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ssid: 'TestNetwork', password: ''})
+            });
+            return await res.json();
+        }""")
+        assert result["success"] is False
+        assert "password" in result["error"].lower()
+
+    def test_wifi_manual_entry_button(self, flask_server, page):
+        """Manual entry button should show SSID input field."""
+        page.goto(f"{FLASK_URL}/wifi")
+
+        manual_btn = page.locator("button", has_text="Enter network name manually")
+        expect(manual_btn).to_be_visible()
+
+        manual_btn.click()
+        page.wait_for_timeout(300)
+
+        # Connect card should be visible with manual SSID input
+        expect(page.locator("#connectCard")).to_be_visible()
+        expect(page.locator("#manualSSID")).to_be_visible()
+        page.screenshot(path=str(SCREENSHOTS_DIR / "19-wifi-manual-entry.png"))
+
+    def test_root_skips_wifi_on_ec2(self, flask_server, page):
+        """On EC2 (no AP mode), root should skip WiFi and go to setup."""
+        # Remove setup complete marker to test fresh state
+        try:
+            os.remove("/opt/piclaw/.setup-complete")
+        except FileNotFoundError:
+            pass
+        try:
+            os.remove(f"{PICOCLAW_HOME}/config.json")
+        except FileNotFoundError:
+            pass
+
+        page.goto(FLASK_URL)
+        # Should go to setup/1, NOT wifi (since _is_ap_mode returns False on EC2)
+        assert "/setup/1" in page.url

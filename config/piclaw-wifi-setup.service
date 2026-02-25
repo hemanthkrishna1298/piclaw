@@ -1,0 +1,14 @@
+[Unit]
+Description=PiClaw WiFi Setup (AP + Captive Portal)
+After=network.target
+Before=piclaw-setup-wizard.service
+ConditionPathExists=!/opt/piclaw/.wifi-configured
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/opt/piclaw/scripts/wifi-setup.sh auto
+ExecStop=/opt/piclaw/scripts/wifi-setup.sh stop
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,212 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="logo">📶</div>
+<h1>Connect to WiFi</h1>
+<p class="subtitle">Connect your PiClaw to your home network.</p>
+
+<div class="card" id="scanCard">
+    <label>Available Networks</label>
+    <div id="networkList" class="network-list">
+        <p class="info" style="text-align:center; padding: 1rem 0;">
+            <span id="scanStatus">Scanning for networks...</span>
+        </p>
+    </div>
+    <button type="button" class="btn btn-secondary" onclick="scanNetworks()" style="margin-top: 0.75rem;">
+        🔄 Refresh
+    </button>
+</div>
+
+<div class="card" id="connectCard" style="display: none;">
+    <label id="selectedSSIDLabel">Connect to: <strong id="selectedSSID"></strong></label>
+
+    <div style="margin-top: 0.75rem;">
+        <label for="manualSSID" style="display:none;" id="manualSSIDLabel">Network Name</label>
+        <input type="text" id="manualSSID" style="display:none; margin-bottom: 0.75rem;" placeholder="Enter network name">
+    </div>
+
+    <label for="wifiPassword">Password</label>
+    <input type="password" id="wifiPassword" placeholder="WiFi password" autocomplete="off">
+
+    <div style="margin-top: 0.75rem;">
+        <label for="wifiCountry">Country</label>
+        <select id="wifiCountry" style="width:100%; padding:0.75rem; background:#111; border:1px solid #333; border-radius:8px; color:#fff; font-size:1rem;">
+            <option value="US">United States</option>
+            <option value="GB">United Kingdom</option>
+            <option value="DE">Germany</option>
+            <option value="FR">France</option>
+            <option value="JP">Japan</option>
+            <option value="IN">India</option>
+            <option value="AU">Australia</option>
+            <option value="CA">Canada</option>
+        </select>
+    </div>
+
+    <div id="connectError" class="error-banner" style="display: none; margin-top: 0.75rem;">
+        <span class="error-icon">⚠️</span>
+        <span id="connectErrorText"></span>
+    </div>
+
+    <button type="button" class="btn" onclick="connectWifi()" id="connectBtn" style="margin-top: 1rem;">
+        <span id="connectBtnText">Connect →</span>
+        <span id="connectBtnSpinner" style="display:none">Connecting...</span>
+    </button>
+
+    <button type="button" class="btn btn-secondary" onclick="backToScan()" style="margin-top: 0.5rem;">
+        ← Back
+    </button>
+</div>
+
+<div class="card" id="successCard" style="display: none;">
+    <div style="text-align: center; padding: 1rem 0;">
+        <div style="font-size: 3rem; margin-bottom: 0.5rem;">✅</div>
+        <h2 style="color: #4ade80; margin-bottom: 0.5rem;">Connected!</h2>
+        <p class="info" style="color: #ccc; margin-bottom: 1rem;" id="successMessage"></p>
+        <p class="info">This page will redirect in a moment...</p>
+    </div>
+</div>
+
+<div style="text-align: center; margin-top: 1rem;">
+    <button type="button" class="btn btn-secondary" onclick="showManualEntry()" style="width: auto; display: inline-block; padding: 0.5rem 1rem; font-size: 0.85rem;">
+        Enter network name manually
+    </button>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let selectedSSID = '';
+
+async function scanNetworks() {
+    const list = document.getElementById('networkList');
+    const status = document.getElementById('scanStatus');
+    list.innerHTML = '<p class="info" style="text-align:center; padding: 1rem 0;"><span id="scanStatus">Scanning...</span></p>';
+
+    try {
+        const res = await fetch('/api/wifi/scan', { method: 'POST' });
+        const data = await res.json();
+
+        if (data.error) {
+            list.innerHTML = `<p class="info" style="text-align:center; padding:1rem 0; color:#f87171;">${data.error}</p>`;
+            return;
+        }
+
+        if (!data.networks || data.networks.length === 0) {
+            list.innerHTML = '<p class="info" style="text-align:center; padding:1rem 0;">No networks found. Try refreshing.</p>';
+            return;
+        }
+
+        list.innerHTML = data.networks.map(n => {
+            const bars = signalBars(n.signal);
+            return `<div class="network-item" onclick="selectNetwork('${escapeHtml(n.ssid)}')">
+                <span class="network-name">${escapeHtml(n.ssid)}</span>
+                <span class="network-signal">${bars}</span>
+            </div>`;
+        }).join('');
+    } catch(e) {
+        list.innerHTML = '<p class="info" style="text-align:center; padding:1rem 0; color:#f87171;">Scan failed. Try refreshing.</p>';
+    }
+}
+
+function selectNetwork(ssid) {
+    selectedSSID = ssid;
+    document.getElementById('selectedSSID').textContent = ssid;
+    document.getElementById('selectedSSIDLabel').style.display = 'block';
+    document.getElementById('manualSSID').style.display = 'none';
+    document.getElementById('manualSSIDLabel').style.display = 'none';
+    document.getElementById('scanCard').style.display = 'none';
+    document.getElementById('connectCard').style.display = 'block';
+    document.getElementById('wifiPassword').focus();
+}
+
+function showManualEntry() {
+    selectedSSID = '';
+    document.getElementById('selectedSSIDLabel').style.display = 'none';
+    document.getElementById('manualSSID').style.display = 'block';
+    document.getElementById('manualSSIDLabel').style.display = 'block';
+    document.getElementById('scanCard').style.display = 'none';
+    document.getElementById('connectCard').style.display = 'block';
+    document.getElementById('manualSSID').focus();
+}
+
+function backToScan() {
+    document.getElementById('scanCard').style.display = 'block';
+    document.getElementById('connectCard').style.display = 'none';
+    document.getElementById('connectError').style.display = 'none';
+}
+
+async function connectWifi() {
+    const ssid = selectedSSID || document.getElementById('manualSSID').value.trim();
+    const password = document.getElementById('wifiPassword').value;
+    const country = document.getElementById('wifiCountry').value;
+
+    if (!ssid) {
+        showConnectError('Please select or enter a network name.');
+        return;
+    }
+    if (!password) {
+        showConnectError('Please enter the WiFi password.');
+        return;
+    }
+
+    // Show loading
+    document.getElementById('connectBtnText').style.display = 'none';
+    document.getElementById('connectBtnSpinner').style.display = 'inline';
+    document.getElementById('connectBtn').disabled = true;
+    document.getElementById('connectError').style.display = 'none';
+
+    try {
+        const res = await fetch('/api/wifi/connect', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ ssid, password, country })
+        });
+        const data = await res.json();
+
+        if (data.success) {
+            document.getElementById('connectCard').style.display = 'none';
+            document.getElementById('successCard').style.display = 'block';
+            document.getElementById('successMessage').textContent = data.message;
+
+            // Redirect to the new IP after a few seconds
+            if (data.ip && data.ip !== 'unknown') {
+                setTimeout(() => {
+                    window.location.href = `http://${data.ip}:8080/setup/1`;
+                }, 5000);
+            }
+        } else {
+            showConnectError(data.error || 'Connection failed.');
+            resetConnectBtn();
+        }
+    } catch(e) {
+        showConnectError('Connection lost — if the Pi connected successfully, find it on your home network.');
+        resetConnectBtn();
+    }
+}
+
+function showConnectError(msg) {
+    document.getElementById('connectError').style.display = 'flex';
+    document.getElementById('connectErrorText').textContent = msg;
+}
+
+function resetConnectBtn() {
+    document.getElementById('connectBtnText').style.display = 'inline';
+    document.getElementById('connectBtnSpinner').style.display = 'none';
+    document.getElementById('connectBtn').disabled = false;
+}
+
+function signalBars(dbm) {
+    // Convert dBm to 1-4 bars
+    const strength = dbm > -50 ? 4 : dbm > -60 ? 3 : dbm > -70 ? 2 : 1;
+    return '▂▄▆█'.slice(0, strength);
+}
+
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+// Auto-scan on page load
+document.addEventListener('DOMContentLoaded', scanNetworks);
+</script>
+{% endblock %}

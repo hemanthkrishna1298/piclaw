@@ -10,26 +10,36 @@
     <div class="step-dot"></div>
 </div>
 
-<form action="/setup/3" method="POST" id="providerForm">
-    <input type="hidden" name="provider" id="selectedProvider" value="">
+{% if error %}
+<div class="error-banner" id="errorBanner">
+    <span class="error-icon">⚠️</span>
+    <span>{{ error }}</span>
+    <button class="error-close" onclick="this.parentElement.remove()">×</button>
+</div>
+{% endif %}
+
+<form action="/setup/3" method="POST" id="providerForm" onsubmit="return handleSubmit(event)">
+    <input type="hidden" name="provider" id="selectedProvider" value="{{ selected_provider or '' }}">
 
     <div class="provider-grid">
         {% for key, p in providers.items() %}
-        <div class="provider-card" onclick="selectProvider('{{ key }}', this)">
+        <div class="provider-card {% if selected_provider == key %}selected{% endif %}" onclick="selectProvider('{{ key }}', this)">
             <div class="name">{{ p.name }}</div>
             <div class="model">{{ p.default_model }}</div>
         </div>
         {% endfor %}
     </div>
 
-    <div class="card" id="apiKeySection" style="display: none;">
+    <div class="card" id="apiKeySection" style="{% if selected_provider %}display:block{% else %}display:none{% endif %}">
         <label for="api_key">API Key</label>
-        <input type="password" id="api_key" name="api_key" placeholder="sk-...">
-        <a href="#" class="help-link" id="docsLink" target="_blank">Where do I find this? →</a>
+        <input type="password" id="api_key" name="api_key" placeholder="sk-..." autocomplete="off">
+        <div id="keyStatus" class="key-status"></div>
+        <a href="{{ providers[selected_provider].docs_url if selected_provider else '#' }}" class="help-link" id="docsLink" target="_blank">Where do I find this? →</a>
     </div>
 
-    <button type="submit" class="btn" id="submitBtn" style="display: none;">
-        Start My Agent →
+    <button type="submit" class="btn" id="submitBtn" style="{% if selected_provider %}display:block{% else %}display:none{% endif %}">
+        <span id="btnText">Start My Agent →</span>
+        <span id="btnSpinner" style="display:none">Validating...</span>
     </button>
 </form>
 {% endblock %}
@@ -42,6 +52,8 @@ const docsUrls = {
     {% endfor %}
 };
 
+let validationTimeout = null;
+
 function selectProvider(key, el) {
     document.querySelectorAll('.provider-card').forEach(c => c.classList.remove('selected'));
     el.classList.add('selected');
@@ -50,6 +62,88 @@ function selectProvider(key, el) {
     document.getElementById('submitBtn').style.display = 'block';
     document.getElementById('docsLink').href = docsUrls[key];
     document.getElementById('api_key').focus();
+    clearKeyStatus();
+}
+
+// Live validation as user types (debounced)
+document.addEventListener('DOMContentLoaded', () => {
+    const input = document.getElementById('api_key');
+    if (input) {
+        input.addEventListener('input', () => {
+            clearKeyStatus();
+            if (validationTimeout) clearTimeout(validationTimeout);
+            const key = input.value.trim();
+            if (key.length > 10) {
+                validationTimeout = setTimeout(() => validateKey(key), 800);
+            }
+        });
+    }
+});
+
+async function validateKey(key) {
+    const provider = document.getElementById('selectedProvider').value;
+    if (!provider || !key) return;
+
+    const status = document.getElementById('keyStatus');
+    status.innerHTML = '<span style="color:#888">Checking key...</span>';
+
+    try {
+        const res = await fetch('/api/validate-key', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({provider, api_key: key})
+        });
+        const data = await res.json();
+        if (data.valid) {
+            status.innerHTML = '<span style="color:#4ade80">✓ Key is valid</span>';
+        } else {
+            status.innerHTML = `<span style="color:#f87171">✗ ${data.error}</span>`;
+        }
+    } catch(e) {
+        status.innerHTML = '<span style="color:#888">Could not validate (will check on submit)</span>';
+    }
+}
+
+function clearKeyStatus() {
+    document.getElementById('keyStatus').innerHTML = '';
+}
+
+function handleSubmit(e) {
+    const key = document.getElementById('api_key').value.trim();
+    const provider = document.getElementById('selectedProvider').value;
+
+    if (!provider) {
+        showError('Please select a provider.');
+        e.preventDefault();
+        return false;
+    }
+    if (!key) {
+        showError('Please enter your API key.');
+        document.getElementById('api_key').focus();
+        e.preventDefault();
+        return false;
+    }
+    if (key.length < 10) {
+        showError('That API key looks too short. Please check it.');
+        e.preventDefault();
+        return false;
+    }
+
+    // Show loading state
+    document.getElementById('btnText').style.display = 'none';
+    document.getElementById('btnSpinner').style.display = 'inline';
+    document.getElementById('submitBtn').disabled = true;
+    return true;
+}
+
+function showError(msg) {
+    let banner = document.getElementById('errorBanner');
+    if (banner) banner.remove();
+    const div = document.createElement('div');
+    div.className = 'error-banner';
+    div.id = 'errorBanner';
+    div.innerHTML = `<span class="error-icon">⚠️</span><span>${msg}</span><button class="error-close" onclick="this.parentElement.remove()">×</button>`;
+    document.querySelector('.step-indicator').after(div);
 }
 </script>
 {% endblock %}
